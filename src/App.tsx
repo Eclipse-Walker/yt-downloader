@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { downloadDir } from "@tauri-apps/api/path";
 import './App.css';
 
+import { listen } from "@tauri-apps/api/event";
+
 const PRESETS = [
   { label: "Video (MP4 1080p)", value: "video", format: "mp4", quality: "1080" },
   { label: "Audio (MP3)", value: "audio", format: "mp3", quality: "audio" },
@@ -28,6 +30,7 @@ export default function App() {
   const [quality, setQuality] = useState(PRESETS[0].quality);
   const [output, setOutput] = useState("");
   const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("idle");
   const [log, setLog] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [theme, setTheme] = useState("light");
@@ -77,16 +80,47 @@ export default function App() {
     if (selected) setOutput(`${selected}\\%(title)s.%(ext)s`);
   }
 
+  useEffect(() => {
+    let unlistenProgress: any;
+    let unlistenLog: any;
+    let unlistenStatus: any;
+
+    // listen progress %
+    listen("download-progress", e => {
+      const percent = typeof e.payload === 'number' ? e.payload : Number(e.payload);
+      setProgress(percent);
+    }).then(un => { unlistenProgress = un });
+
+    // listen log
+    listen("download-log", e => {
+      setLog(prev => prev + "\n" + e.payload);
+    }).then(un => { unlistenLog = un });
+
+    // listen status
+    listen("download-status", e => {
+      setStatus(e.payload as string);
+    }).then(un => { unlistenStatus = un });
+
+    return () => {
+      if (unlistenProgress) unlistenProgress();
+      if (unlistenLog) unlistenLog();
+      if (unlistenStatus) unlistenStatus();
+    }
+  }, []);
+
   async function download() {
     setDownloading(true);
+    setStatus("downloading");
     setLog("Preparing download...");
-    setProgress(10);
+    setProgress(0);
     try {
       const result = await invoke("run_ytdlp", { url, output, format, quality });
       setProgress(100);
+      setStatus("success");
       setLog(result as string);
     } catch (e) {
       setLog(`Error: ${e}`);
+      setStatus("error");
     }
     setDownloading(false);
   }
@@ -165,7 +199,27 @@ export default function App() {
             <Button className="w-full mt-2" onClick={download} disabled={downloading || !url}>
               {downloading ? "Downloading..." : "Download"}
             </Button>
-            {downloading && <Progress value={progress} className="mt-2" />}
+
+            {/* Progress, show different state */}
+            {downloading && status === "downloading" && (
+              <>
+                <Progress value={progress} className="mt-2" />
+                <div className="text-right text-xs text-gray-500">{progress.toFixed(1)}%</div>
+              </>
+            )}
+            {downloading && status === "extracting" && (
+              <div className="mt-2 text-xs text-blue-600">Extracting audio...</div>
+            )}
+            {downloading && status === "merging" && (
+              <div className="mt-2 text-xs text-purple-600">Merging video/audio...</div>
+            )}
+            {status === "success" && (
+              <div className="mt-2 text-xs text-green-600">Download completed!</div>
+            )}
+            {status === "error" && (
+              <div className="mt-2 text-xs text-red-600">Download failed! Check log.</div>
+            )}
+
             <pre className="bg-gray-100 dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100 p-2 mt-4 rounded-xl max-h-40 overflow-auto border border-slate-200 dark:border-slate-700 transition-colors">
               {log}
             </pre>
