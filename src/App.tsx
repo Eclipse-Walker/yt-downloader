@@ -1,5 +1,4 @@
 import { Button } from "@tauri-apps/api/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@tauri-apps/api/components/ui/card";
 import { Input } from "@tauri-apps/api/components/ui/input";
 import { Progress } from "@tauri-apps/api/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tauri-apps/api/components/ui/select";
